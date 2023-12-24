@@ -1,0 +1,319 @@
+---
+title: "outliers"
+author: "Maitri Jain"
+date: '2023-02-04'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(pastecs)
+library(psych)
+library(car)
+
+df = read_csv("../data/PSOC_final_data.csv")
+df2 = df %>% select("SubID", "childAge", "PHQ9_total", "SSQSR_Total", "SSQSR_SatisfactionAvg", "PSOC_avg","numChildren", "HouseholdIncome", "country")
+df3 = df2[complete.cases(df2), ]
+
+```
+
+# 3-way
+```{r}
+three_model = lm(PSOC_avg ~ PHQ9_total*SSQSR_SatisfactionAvg*childAge + numChildren + HouseholdIncome + country, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(three_model)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(three_model)
+
+# save leverage or hat values to data frame
+
+df3$leverage <- hatvalues(three_model)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(three_model)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - depression predicting PSOC
+```{r}
+phq = lm(PSOC_avg ~ PHQ9_total, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(phq)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(phq) 
+
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(phq)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(phq)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - SSQSR_total predicting PSOC
+
+```{r}
+ssqsr_total = lm(PSOC_avg ~ SSQSR_Total, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(ssqsr_total)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(ssqsr_total)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(ssqsr_total)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(ssqsr_total)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - SSQSR_satisfaction predicting PSOC
+
+```{r}
+ssqsr_satisfaction = lm(PSOC_avg ~ SSQSR_SatisfactionAvg, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(ssqsr_satisfaction)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(ssqsr_satisfaction)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(ssqsr_satisfaction)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(ssqsr_satisfaction)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - child age predicting PSOC
+
+```{r}
+childage = lm(PSOC_avg ~ childAge, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(childage)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(childage)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(childage)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(childage)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+# depression and child age interaction
+
+```{r}
+ssqsr_satisfaction = lm(PSOC_avg ~ SSQSR_SatisfactionAvg, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(ssqsr_satisfaction)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(ssqsr_satisfaction)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(ssqsr_satisfaction)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(ssqsr_satisfaction)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - child age predicting PSOC
+
+```{r}
+int1 = lm(PSOC_avg ~ PHQ9_total*childAge, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(int1)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(int1)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(int1)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(int1)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - interaction1
+
+```{r}
+int1 = lm(PSOC_avg ~ PHQ9_total*childAge, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(int1)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(int1)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(int1)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(int1)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+
+## Regression model - interaction2
+
+```{r}
+int2 = lm(PSOC_avg ~ SSQSR_SatisfactionAvg*childAge, data = df3)
+
+# save standardized residuals to data frame
+df3$resid_Z <- rstandard(int2)
+
+# save Cook's distance to data frame
+df3$cooksDist <- cooks.distance(int2)
+
+# save leverage or hat values to data frame
+# expected leverage value per observation computed elsewhere is = 0.0033
+df3$leverage <- hatvalues(int2)
+
+# save DFFit values to data frame
+df3$dfFitValues <- dffits(int2)
+
+# select cases with large residuals by creating a column
+# of TRUE or FALSE values that the standardized residual is
+#   less than negative 2.5 (code before the pipe) 
+#   OR (meaning of pipe or | symbol)
+#   greater than 2.5 (code after the pipe)
+df3$potential_concern <- df3$resid_Z < -2.5 | df3$resid_Z > 2.5
+
+# How many cases could be problematic?
+sum(df3$potential_concern)
+
+# examine the additional statistical information for cases
+# with large residuals
+df3[df3$potential_concern,c("resid_Z","cooksDist","leverage","dfFitValues")]
+```
+

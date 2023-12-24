@@ -1,0 +1,749 @@
+---
+title: "PSOC_analysis"
+author: "Maitri Jain"
+date: '2023-02-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## checking overall significance of model
+## checking if it explains big enough variance
+## significant outliers
+## model diagnostics - for generalizaiton purposes
+## jn estimate
+## both standardized and non-standardized effect sizes
+## apa tables
+## look at bootstrapped confidence intervals -- results same? testing for normality of residuals.
+
+
+# Libraries and data
+```{r}
+library(tidyverse)
+library(broom)
+library(interactions)
+library(psych)
+library(corrplot)
+library(Hmisc)
+library(MVN)
+library(sjPlot) # tables
+library (car)
+
+source("../../ISDP:SRCD 2022/R_Scripts/processv41/PROCESS v4.1 for R/process.R") 
+df = read_csv("../data/PSOC_final_data.csv")
+
+# Standardizing
+df$PSOC_avg_z <- as.numeric(scale(df$PSOC_avg, center = TRUE, scale = TRUE))
+df$PHQ9_total_z <- as.numeric(scale(df$PHQ9_total, center = T, scale = T))
+df$SSQSR_SatisfactionAvg_z <- as.numeric(scale(df$SSQSR_SatisfactionAvg, center = T, scale = T))
+df$childAge_z <- as.numeric(scale(df$childAge, center = T, scale = T))
+df$numChildren_z <- as.numeric(scale(df$numChildren, center = T, scale = T))
+df$HouseholdIncome_z <- as.numeric(scale(df$HouseholdIncome, center = T, scale = T)) 
+
+
+```
+
+
+# DESCRIPTIVE STATISTICS
+```{r}
+# Child Age
+summary(df$childAge)
+ggplot(df, aes(x = childAge)) + geom_freqpoly()
+shapiro.test(df$childage_z) # not normal
+
+# Race
+summary(as.factor(df$ParentRace_string))
+ggplot(df, aes(x = ParentRace_string)) + geom_bar()
+
+# Ethnicity
+
+
+# Income
+summary(df$HouseholdIncome)
+ggplot(df, aes(x = HouseholdIncome)) + geom_freqpoly()
+
+
+# Education
+
+
+# Number of children
+
+
+# Parent age
+summary(df$ParentAge)
+ggplot(df, aes(x = ParentAge)) + geom_freqpoly()
+
+# Parent gender
+summary(as.factor(df$ParentGender))
+ggplot(df, aes(x = ParentRace_string)) + geom_bar()
+
+# PSOC
+summary(df$PSOC_avg_z)
+ggplot(df, aes(x = PSOC_avg_z)) + geom_histogram()
+shapiro.test(df$PSOC_avg_z) # normal
+
+# PHQ
+summary(df$PHQ9_total_z)
+ggplot(df, aes(x = PHQ9_total_z)) + geom_histogram()
+shapiro.test(df$GAD_total_z) # not normal
+
+# Social support total
+summary(df$SSQSR_total_z)
+ggplot(df, aes(x = SSQSR_total_z)) + geom_histogram()
+shapiro.test(df$SSQSR_total_z) # not normal
+
+# Social support satisfaction
+summary(as.numeric(df$SSQSR_satisfaction_z))
+ggplot(df, aes(x = as.numeric(df$SSQSR_satisfaction_z))) + geom_histogram()
+shapiro.test(as.numeric(df$SSQSR_satisfaction_z)) # not normal
+
+```
+
+# Descriptive relationship between variables
+```{r}
+cor_data = df2 %>% select("childAge_z", "HouseholdIncome_z", "numChildren_z", "PSOC_avg_z", "PHQ9_total_z", "SSQSR_Total_z", "SSQSR_SatisfactionAvg_z")
+
+# relationship between variables
+pairs.panels(cor_data, method = "pearson")
+
+# correlations between variables
+correlations = rcorr(as.matrix(cor_data))
+corrplot(correlations$r) 
+
+```
+
+# Multivariate normality
+```{r}
+mvn(cor_data, mvnTest = "mardia")
+```
+
+# function for f2
+```{r}
+f2_func = function(r2) {
+  den = 1 - r2
+  return(r2/den)
+}
+```
+
+# 3-way interaction model
+```{r}
+three_model = lm(PSOC_avg_z ~ PHQ9_total_z*SSQSR_SatisfactionAvg_z*childAge_z + numChildren_z + HouseholdIncome_z + country, data = df2)
+summary(three_model)
+```
+
+## normality of residuals
+```{r}
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(three_model)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+```
+
+## homoscedasticiity
+```{r}
+ 
+mod_simple_fitted <- fitted(three_model)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+```
+
+## vif
+```{r}
+# multicolleniarity
+## compute VIF
+vif(three_model) 
+
+
+## compute average VIF
+mean(vif(three_model))
+
+## compute tolerance
+1 / vif(three_model)
+```
+
+# Parent mental health
+
+## PHQ9
+```{r}
+
+ggplot(df, aes(x = PHQ9_total, y = PSOC_avg)) +
+  geom_point() +
+  geom_smooth (method = "lm")
+
+phq = lm(PSOC_avg_z ~ PHQ9_total_z, data = df)
+summary(phq)
+
+par(mfrow = c(2, 2))
+plot(phq)
+
+psoc_phq = ggplot(df, aes(x = PHQ9_total_z, y = PSOC_avg_z)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+psoc_phq
+
+f2_func(0.1113) ##0.1252391
+
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(phq)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(phq)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# generate diagnostic plots
+plot(phq)
+
+# to get both standardized and unstandardized coefficients without first having to standardize variables
+
+# estimate standardized regression coefficients AND the project required
+# APA formated regression table
+
+library(apaTables)
+apa.reg.table(phq, filename = "draft_apa_regresssion_table.doc")
+
+# independence
+# run the Durbin-Watson test
+
+library(pastecs)
+library(psych)
+library(car)
+
+durbinWatsonTest(phq)
+
+```
+
+
+
+# social support
+
+## total
+```{r}
+social_total = lm(PSOC_avg_z ~ SSQSR_total_z, data = df)
+summary(social_total)
+
+par(mfrow = c(2, 2))
+plot(social_total)
+
+psoc_ssqr2 = ggplot(df, aes(x = SSQSR_total_z, y = PSOC_avg_z)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+psoc_ssqr2
+
+f2_func(0.01247) ##0.01262746
+
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(social_total)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(social_total)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# generate diagnostic plots
+plot(social_total)
+
+
+# independence
+# run the Durbin-Watson test
+
+library(pastecs)
+library(psych)
+library(car)
+
+durbinWatsonTest(social_total)
+```
+
+
+## satisfaction
+```{r}
+social_satisfaction = lm(PSOC_avg_z ~ SSQSR_satisfaction_z, data = df)
+summary(social_satisfaction)
+
+par(mfrow = c(2, 2))
+plot(social_satisfaction)
+
+psoc_ssqr = ggplot(df, aes(x = SSQSR_satisfaction_z, y = PSOC_avg_z)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+psoc_ssqr
+
+f2_func(0.07133) ##0.07680877
+
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(social_satisfaction)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(social_satisfaction)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+
+# to get both standardized and unstandardized coefficients without first having to standardize variables
+
+# estimate standardized regression coefficients AND the project required
+# APA formated regression table
+
+library(apaTables)
+apa.reg.table(phq, filename = "draft_apa_regresssion_table.doc")
+
+# independence
+# run the Durbin-Watson test
+
+library(pastecs)
+library(psych)
+library(car)
+
+durbinWatsonTest(social_satisfaction)
+```
+
+# child age
+```{r}
+child_age = lm(PSOC_avg_z ~ childage_z, data = df)
+summary(child_age)
+
+par(mfrow = c(2, 2))
+plot(child_age)
+
+psoc_age = ggplot(df, aes(x = childage_z, y = PSOC_avg_z)) +
+  geom_point() +
+  geom_smooth(method = lm)
+psoc_age
+
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(child_age)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(child_age)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(child_age)
+```
+
+# Interactions
+
+## child age with social support total --  do not report it as significant -- because it is very small effect size -- or report exactly what is happening
+```{r}
+process(data = df, y = "PSOC_avg_z", x = "SSQSR_total_z", w = "childage_z", cov = c("SSQSR_satisfaction_z"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+interact_plot(model = lm(PSOC_avg_z ~ SSQSR_total_z*childage_z + SSQSR_satisfaction_z, data = df), pred = SSQSR_total_z, modx = childage_z) 
+
+f2_func(0.0427) ##0.04460462
+
+# check to see if overall model is sig and whether interaction improves fit
+int_fit <- lm(PSOC_avg_z ~ SSQSR_total_z*childage_z, data = df)
+main_fit <- lm(PSOC_avg_z ~ SSQSR_total_z+childage_z, data = df)
+anova(main_fit,int_fit)
+
+
+model1 = lm(PSOC_avg_z ~ SSQSR_total_z*childage_z + SSQSR_satisfaction_z, data = df)
+summary
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model1)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model1)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model1)
+
+# multicolleniarity
+## compute VIF
+vif(model1)
+
+## compute average VIF
+mean(vif(model1))
+
+## compute tolerance
+1 / vif(model1)
+
+```
+
+## child age with social support satisfaction - mean center the variables.
+```{r}
+process(data = df, y = "PSOC_avg_z", x = "SSQSR_satisfaction_z", w = "childage_z", model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+model2 = lm(PSOC_avg_z ~ SSQSR_satisfaction_z*childage_z, data = df)
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model2)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model2)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model2)
+
+# multicolleniarity
+library(car)
+## compute VIF
+vif(model2)
+
+## compute average VIF
+mean(vif(model2))
+
+## compute tolerance
+1 / vif(model2)
+```
+
+## child age with depression
+```{r}
+process(data = df, y = "PSOC_avg_z", x = "PHQ9_total_z", w = "childage_z", model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+interact_plot(model = lm(PSOC_avg_z ~ PHQ9_total_z*childage_z, data = df), pred = PHQ9_total_z, modx = childage_z) 
+
+
+f2_func(0.1401) ##0.1629259
+
+# check to see if overall model is sig and whether interaction improves fit
+int_fit <- lm(PSOC_avg_z ~ PHQ9_total_z*childage_z, data = df)
+main_fit <- lm(PSOC_avg_z ~ PHQ9_total_z+childage_z, data = df)
+anova(main_fit,int_fit)
+
+model3 = lm(PSOC_avg_z ~ PHQ9_total_z*childage_z, data = df)
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model3)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model3)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model3)
+
+# multicolleniarity
+## compute VIF
+vif(model3)
+
+## compute average VIF
+mean(vif(model3)) 
+
+## compute tolerance
+1 / vif(model3)
+```
+
+## depression and social support total
+```{r}
+process(data = df, y = "PSOC_avg_z", x = "PHQ9_total_z", w = "SSQSR_total_z", model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+model4 = lm(PSOC_avg_z ~ PHQ9_total_z*SSQSR_total_z, data = df)
+summary(model4)
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model4)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model4)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model4)
+
+# multicolleniarity
+## compute VIF
+vif(model4)
+
+## compute average VIF
+mean(vif(model4)) 
+
+## compute tolerance
+1 / vif(model4)
+```
+
+## depression and social support satisfaction
+```{r}
+model5 = lm(PSOC_avg_z ~ SSQSR_satisfaction_z*childage_z, data = df)
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model5)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model5)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model5)
+
+# multicolleniarity
+## compute VIF
+vif(model5)
+
+## compute average VIF
+mean(vif(model5)) 
+
+## compute tolerance
+1 / vif(model5)
+```
+
+## 3-way interaction
+```{r}
+process(data = df, y = "PSOC_avg_z", x = "PHQ9_total_z", w = "SSQSR_total_z", z = "childage_z", model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903, plot = 1) 
+
+## not significant
+
+fita3 <- lm(PSOC_avg_z ~ PHQ9_total_z * SSQSR_total_z * childage_z, data = df)
+
+probe_interaction(fita3, pred = PHQ9_total_z, modx = SSQSR_total_z, mod2 = childage_z,
+                  alpha = .1)
+
+f2_func(0.1716) ##0.2071463
+
+model6 = lm(PSOC_avg_z ~ SSQSR_total_z*PHQ9_total_z*childage_z, data = df)
+# looking at residuals
+
+## extract the model residuals while maintaining the original scale
+mod_simple_resid <- residuals(model6)
+
+## histogram of model residuals in the original scale
+hist(mod_simple_resid, main = "", 
+     #ylim = c(0, .9), # set the lower and upper values for the graph
+     xlab = "Model Residuals (z-score)", col = "beige", probability = TRUE)
+curve(dnorm(x, mean = mean(mod_simple_resid), 
+            sd = sd(mod_simple_resid)), col = "darkgreen",
+            add = TRUE, lwd = 2)
+
+# looking at homoscedasticity
+mod_simple_fitted <- fitted(model6)
+
+## scatterplot of residuals ~ predicted values
+plot(mod_simple_resid ~ mod_simple_fitted,
+     pch = 16, # sets the Point CHarater to filled in circles
+     ylab = "Model Residuals",
+     xlab = "Model Predicted Values")
+## horizontal line at expected mean value of residuals
+abline(h = 0, lwd = 2, col = "blue")
+## lines at +/- 2SD from mean to provide visual indication of equal variance
+abline(h = (sd(mod_simple_resid)*2), lty = 3, lwd = 1.5, col = "red")
+abline(h = (sd(mod_simple_resid)*-2), lty = 3, lwd = 1.5, col = "red")
+
+# independence
+durbinWatsonTest(model6)
+
+# multicolleniarity
+## compute VIF
+vif(model6)
+
+## compute average VIF
+mean(vif(model6)) 
+
+## compute tolerance
+1 / vif(model6)
+```
+
+# APA-ish tables
+
+```{r apa_table}
+tab_model(main_fit, int_fit,
+          show.std = TRUE,
+          #pred.labels = c("intercept","PHQ-9","Child age","PHQ-9 * Age"),
+          col.order = c("est","p","ci","std.est","std.p"),
+          p.style = "numeric",
+          file = "draft_dep_by_age.html")
+```
+

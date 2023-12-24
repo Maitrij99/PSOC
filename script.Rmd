@@ -1,0 +1,773 @@
+---
+title: "FINAL"
+author: "Maitri Jain"
+date: '2023-02-21'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Library and data
+```{r}
+library(tidyverse)
+library(Hmisc)
+library(psych)
+library(interactions)
+library(corrplot)
+library(sjPlot)
+library(cowplot)
+library(broom.mixed)
+
+###source("../../ISDP:SRCD 2022/R_Scripts/processv41/PROCESS v4.1 for R/process.R") 
+df = read_csv("../data/PSOC_final_data.csv")
+
+# Standardizing
+df$PSOC_avg_z <- as.numeric(scale(df$PSOC_avg, center = TRUE, scale = TRUE))
+df$PHQ9_total_z <- as.numeric(scale(df$PHQ9_total, center = T, scale = T))
+df$SSQSR_SatisfactionAvg_z <- as.numeric(scale(df$SSQSR_SatisfactionAvg, center = T, scale = T))
+df$childAge_z <- as.numeric(scale(df$childAge, center = T, scale = T))
+df$numChildren_z <- as.numeric(scale(df$numChildren, center = T, scale = T))
+df$HouseholdIncome_z <- as.numeric(scale(df$HouseholdIncome, center = T, scale = T)) 
+df$SSQSR_Total_z <- as.numeric(scale(df$SSQSR_Total, center = T, scale = T))
+df2 = df %>% drop_na(country)
+
+
+df_total = df2 %>% select("PSOC_avg", "SSQSR_Total", "childAge", "PHQ9_total", "numChildren", "HouseholdIncome", "country")
+
+df_satisfaction = df2 %>% select("PSOC_avg", "SSQSR_SatisfactionAvg", "childAge", "PHQ9_total", "numChildren", "HouseholdIncome", "country")
+```
+
+# Looking at demographics
+```{r}
+# Country
+table(df$country)
+g <- df2 %>%
+  group_by(country) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+
+# Child Age
+describe(df2$childAge)
+
+# Race
+summary(as.factor(df$ParentRace_string))
+g <- df2 %>%
+  group_by(ParentRace_string) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Ethnicity
+summary(as.factor(df$ParentLatinx))
+g <- df2 %>%
+  group_by(ParentLatinx) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Income
+summary(as.factor(df$HouseholdIncome))
+g <- df2 %>%
+  group_by(HouseholdIncome) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Education
+summary(as.factor(df$ParentEducation_string))
+g <- df2 %>%
+  group_by(ParentEducation_string) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Number of children
+describe(df2$numChildren)
+
+# Relationship Status
+summary(as.factor(df$Married))
+g <- df2 %>%
+  group_by(Married) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+g
+
+# Parent gender
+summary(as.factor(df$parentGender_chr))
+g <- df2 %>%
+  group_by(parentGender_chr) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+
+# Parent age
+describe(df2$ParentAge)
+
+# Child Race
+summary(as.factor(df$ChildRace_string))
+g <- df2 %>%
+  group_by(ChildRace_string) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Child Gender
+summary(as.factor(df$childGender_chr))
+g <- df2 %>%
+  group_by(childGender_chr) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# Child ethnicity
+summary(as.factor(df$ChildLatinx))
+g <- df2 %>%
+  group_by(ChildLatinx) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+
+# PSOC
+summary(df$PSOC_avg_z)
+ggplot(df, aes(x = PSOC_avg_z)) + geom_histogram()
+shapiro.test(df$PSOC_avg_z) # normal
+
+# PHQ
+summary(df$PHQ9_total_z)
+ggplot(df, aes(x = PHQ9_total_z)) + geom_histogram()
+shapiro.test(df$GAD_total_z) # not normal
+
+# Social support total
+summary(df$SSQSR_Total_z)
+ggplot(df, aes(x = SSQSR_Total_z)) + geom_histogram()
+shapiro.test(df$SSQSR_Total_z) # not normal
+
+# Social support satisfaction
+summary(as.numeric(df$SSQSR_SatisfactionAvg_z))
+ggplot(df, aes(x = as.numeric(df$SSQSR_SatisfactionAvg_z))) + geom_histogram()
+shapiro.test(as.numeric(df$SSQSR_SatisfactionAvg_z)) # not normal
+
+```
+
+# Differences in variable based on country
+```{r}
+
+#child age -- age of children less in the USA
+g <- ggplot(df, aes(country, childAge)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(childAge ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#income -- USA higher income
+g <- ggplot(df, aes(country, HouseholdIncome)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(HouseholdIncome ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#number of children -- no difference
+g <- ggplot(df, aes(country, numChildren)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(numChildren ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#parent age -- no difference
+g <- ggplot(df, aes(country, ParentAge)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(ParentAge ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#Parent race --  significant difference
+chisq.test(df2$country, df2$ParentRace_string, correct=FALSE)
+
+g <- df2 %>%
+  group_by(country,ParentRace_string) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+g
+
+#Parent ethnicity -- no difference
+chisq.test(df2$country, df2$ParentLatinx, correct=FALSE)
+
+
+#parent education -- significant difference
+chisq.test(df2$country, df2$ParentEducation_string, correct=FALSE)
+
+#Parent gender -- no difference
+chisq.test(df2$country, df2$ParentGender, correct=FALSE)
+
+#child race -- significant difference
+chisq.test(df2$country, df2$ChildRace_string, correct=FALSE)
+
+g <- df %>%
+  group_by(country,ChildRace_string) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+g
+
+# child ethnicity -- significant difference
+chisq.test(df2$country, df2$ChildLatinx, correct=FALSE)
+
+g <- df %>%
+  group_by(country,ChildLatinx) %>%
+  summarise(cnt = n()) %>%
+  mutate(freq = formattable::percent(cnt / sum(cnt))) %>% 
+  arrange(desc(freq))
+g
+
+#child gender  -- no significant difference
+chisq.test(df2$country, df2$childGender_chr, correct=FALSE)
+
+
+#PSOC -- USA higher PSOC (0.37 SD)
+g <- ggplot(df, aes(country, PSOC_avg_z)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(PSOC_avg_z ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#PHQ -- no difference
+g <- ggplot(df, aes(country, PHQ9_total_z)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(PHQ9_total_z ~ country,
+  data = df2
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+#Social support satisfaction -- no difference
+g <- ggplot(df, aes(country, SSQSR_SatisfactionAvg_z)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(SSQSR_SatisfactionAvg_z ~ country,
+  data = df
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+
+#Social support total -- no difference
+g <- ggplot(df, aes(country, SSQSR_Total_z)) +
+  geom_boxplot()
+g
+
+res_aov <- aov(SSQSR_Total_z ~ country,
+  data = df
+)
+summary(res_aov)
+
+TukeyHSD(res_aov)
+
+
+```
+
+# Calculating internal reliabilities
+```{r}
+# PSOC
+psoc_df = df2 %>% select("PSOC_1", "PSOC_2R", "PSOC_3R", "PSOC_4R", "PSOC_5R", "PSOC_6", "PSOC_7", "PSOC_8R", "PSOC_9R", "PSOC_10", "PSOC_11", "PSOC_12R", "PSOC_13", "PSOC_14R", "PSOC_15", "PSOC_16R", "PSOC_17")
+omega = omega(psoc_df,n.obs=207,title = "Omega")
+omega$omega.tot
+
+# PHQ-9
+phq_df = df2 %>% select("PHQ_1", "PHQ_2", "PHQ_3", "PHQ_4", "PHQ_5", "PHQ_6", "PHQ_7", "PHQ_8", "PHQ_9")
+omega = omega(phq_df,n.obs=206,title = "Omega")
+omega$omega.tot
+
+##SSQSR Satisfaction
+ssqsr_df = df2 %>% select("SSQSR_1Satisfaction", "SSQSR_2Satisfaction", "SSQSR_3Satisfaction", "SSQSR_4Satisfaction", "SSQSR_5Satisfaction", "SSQSR_6Satisfaction")
+omega = omega(ssqsr_df,n.obs=206,title = "Omega")
+omega$omega.tot
+
+##SSQSR Total
+ssqsr_total_df = df2 %>% select("SSQSR_HelpNum", "SSQSR_RelaxNum", "SSQSR_AcceptNum", "SSQSR_CareNum", "SSQSR_BetterNum", "SSQSR_ConsoleNum")
+omega = omega(ssqsr_total_df,n.obs=207,title = "Omega")
+omega$omega.tot
+
+```
+
+# Descriptive correlations
+```{r}
+cor_data = df2 %>% select("PHQ9_total", "SSQSR_SatisfactionAvg", "SSQSR_Total", "PSOC_avg", "childAge", "numChildren", "HouseholdIncome")
+
+# correlations between variables
+correlations = rcorr(as.matrix(cor_data))
+
+colnames(correlations$r) <- c("Parent Depression", "Social Support Satisfaction", "Social Support Number", "PSOC", "Child Age", "Number of Children", "Household Income")
+rownames(correlations$r) <- c("Parent Depression", "Social Support Satisfaction", "Social Support Number", "PSOC", "Child Age", "Number of Children", "Household Income")
+
+corrplot(correlations$r, method = "color", type = "lower", diag = FALSE, outline = TRUE, tl.col = "black", tl.srt = 30, addCoef.col = TRUE, number.cex = 0.7) 
+
+# table
+tab_corr(
+correlations$r,
+wrap.labels = 40,
+show.p = TRUE,
+p.numeric = FALSE,
+digits = 2,
+triangle = "lower",
+var.labels = c("PHQ9", "SSQSR Satisfaction", "SSQSR Number", "PSOC", "Child Age", "Number of Children", "Income"),
+file = "corr.html"
+)
+```
+
+# Direct effects
+
+
+## covariates
+```{r}
+#income
+summary(lm(PSOC_avg ~ HouseholdIncome, data = df))
+summary(lm(scale(PSOC_avg) ~ scale(HouseholdIncome), data=df))
+
+#children
+summary(lm(PSOC_avg ~ numChildren, data = df))
+summary(lm(scale(PSOC_avg) ~ scale(numChildren), data=df))
+```
+
+## PHQ
+```{r}
+# total
+summary(lm(PSOC_avg ~ PHQ9_total + HouseholdIncome + numChildren, data = df)) #negative association
+summary(lm(scale(PSOC_avg) ~ scale(PHQ9_total) + scale(HouseholdIncome) + scale(numChildren), data = df)) 
+
+#functioning
+summary(lm(PSOC_avg ~ PHQ_Functioning + HouseholdIncome + numChildren, data = df)) ## more difficulties with functioning associated with lower PSOC
+summary(lm(scale(PSOC_avg) ~ scale(PHQ_Functioning) + scale(HouseholdIncome) + scale(numChildren), data = df))
+
+#severity
+df = df %>% mutate(
+  PHQ9_severity_num = recode(
+    PHQ9_severity, 
+    'none' = 0,
+    'mild' = 1,
+    'moderate' = 2,
+    'modSev' = 3,
+    'severe' = 4
+  )
+)
+
+summary(lm(PSOC_avg ~ PHQ9_severity_num + HouseholdIncome + numChildren + ParentEducation_string, data = df)) ## higher severity associated with lower PSOC
+```
+
+## Social support
+```{r}
+# number
+summary(lm(PSOC_avg ~ SSQSR_Total + HouseholdIncome + numChildren, data = df)) # no association
+summary(lm(scale(PSOC_avg) ~ scale(SSQSR_Total) + scale(HouseholdIncome) + scale(numChildren), data = df))
+
+# satisfaction
+summary(lm(PSOC_avg ~ SSQSR_SatisfactionAvg + HouseholdIncome + numChildren, data = df)) # positive association
+summary(lm(scale(PSOC_avg) ~ scale(SSQSR_SatisfactionAvg) + scale(HouseholdIncome) + scale(numChildren), data = df))
+```
+
+## Child Age
+```{r}
+summary(lm(PSOC_avg ~ childAge + HouseholdIncome + numChildren, data = df)) # not associated
+summary(lm(scale(PSOC_avg) ~ scale(childAge) + scale(HouseholdIncome) + scale(numChildren), data = df))
+```
+
+# Interactions
+
+## Social support with child age
+```{r}
+# number
+
+process(data = df, y = "PSOC_avg", x = "SSQSR_Total", w = "childAge", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, seed = 2903)
+
+## standardized
+process(data = df, y = "PSOC_avg_z", x = "SSQSR_Total_z", w = "childAge_z", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903, stand = TRUE) # no significant interaction
+
+
+# satisfaction
+process(data = df, y = "PSOC_avg", x = "SSQSR_SatisfactionAvg", w = "childAge", cov = c("HouseholdIncome", "numChildren", "ParentEducation_string"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) # no significant interaction
+```
+
+## Depression with child age
+```{r}
+# total
+process(data = df, y = "PSOC_avg", x = "PHQ9_total", w = "childAge", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+process(data = df, y = "PSOC_avg", x = "PHQ9_total", w = "childAge", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, seed = 2903)
+
+# functioning
+process(data = df, y = "PSOC_avg", x = "PHQ_Functioning", w = "childAge", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) 
+
+```
+
+## Depression with social support
+```{r}
+# total with total
+process(data = df, y = "PSOC_avg", x = "PHQ9_total", w = "SSQSR_Total", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) #no
+
+## standardized
+process(data = df, y = "PSOC_avg_z", x = "PHQ9_total_z", w = "SSQSR_Total_z", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903)
+
+# total with functioning
+process(data = df, y = "PSOC_avg", x = "PHQ_Functioning", w = "SSQSR_Total", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) 
+
+# satisfaction with total
+process(data = df, y = "PSOC_avg", x = "PHQ9_total", w = "SSQSR_SatisfactionAvg", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) 
+
+
+# satisfaction with functioning
+process(data = df, y = "PSOC_avg", x = "PHQ9_total", w = "SSQSR_SatisfactionAvg", cov = c("HouseholdIncome", "numChildren"), model = 1, jn = 1,
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903) 
+
+
+```
+
+## 3-way interaction
+```{r}
+
+# depression total and social support satisfaction
+# HERE 
+process(data = df, y = "PSOC_avg", x = "SSQSR_SatisfactionAvg", w = "childAge", z = "PHQ9_total", cov = c("HouseholdIncome", "numChildren", "country"), model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903, plot = 1) ##significant
+
+process(data = df, y = "PSOC_avg", x = "SSQSR_SatisfactionAvg", w = "childAge", z = "PHQ9_total", cov = c("HouseholdIncome", "numChildren"), model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, seed = 2903)
+
+## with standardization
+process(data = df, y = "PSOC_avg_z", x = "SSQSR_SatisfactionAvg_z", w = "childAge_z", z = "PHQ9_total_z", cov = c("HouseholdIncome_z", "numChildren_z"), model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, seed = 2903, plot = 1) 
+
+
+# simple slopes
+sim_slopes(
+  model = lm(PSOC_avg ~ PHQ9_total*SSQSR_SatisfactionAvg*childAge, data = df),
+  pred = SSQSR_SatisfactionAvg,
+  modx = childAge,
+  mod2 = PHQ9_total
+) 
+
+# depression total and social suppoort number
+process(data = df, y = "PSOC_avg", x = "SSQSR_Total", w = "childAge", z = "PHQ9_total", cov = c("HouseholdIncome", "numChildren"), model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903, plot = 1) 
+
+## Standardized
+process(data = df, y = "PSOC_avg_z", x = "SSQSR_Total_z", w = "childAge_z", z = "PHQ9_total_z", cov = c("HouseholdIncome", "numChildren"), model = 3, jn = 1, 
+         boot = 5000, modelbt = 1,
+         moments = 1, center = 2, seed = 2903, plot = 1) 
+
+
+#using lm
+
+
+three_model <- lm(PSOC_avg ~ scale(SSQSR_Total)*scale(childAge)*scale(PHQ9_total) + scale(numChildren) + scale(HouseholdIncome) + country, data = df_total)
+summary(three_model)
+
+three_model_2_ns <- lm(PSOC_avg ~ SSQSR_Total*childAge*PHQ9_total + numChildren + HouseholdIncome + country, data = dff_sstotal)
+summary(three_model_2_ns)
+
+tab_model(three_model,bootstrap = TRUE,iterations = 5000,seed = 209,
+          file = "total_three_way.html")
+
+two_model <- lm(PSOC_avg ~ scale(PHQ9_total)*scale(SSQSR_Total) +
+                               scale(SSQSR_Total)*scale(childAge) + 
+                               scale(PHQ9_total)*scale(childAge) + scale(numChildren) + scale(HouseholdIncome) + country, data = df_total)
+summary(two_model)
+
+one_model <- lm(PSOC_avg ~ scale(PHQ9_total) +
+                               scale(SSQSR_Total) + 
+                               scale(childAge) + scale(numChildren) + scale(HouseholdIncome) + country, data = df_total)
+summary(one_model)
+
+tab_model(two_model,bootstrap = TRUE,iterations = 5000,seed = 209,
+          file = "total_two_way.html")
+
+anova_result = anova(three_model, two_model)
+anova_result
+
+anova_result = anova(two_model, one_model)
+anova_result
+
+## calculated JN and simple slopes
+two_model_total <- lm(PSOC_avg ~ SSQSR_Total*childAge + numChildren + HouseholdIncome + country, data = df_total)
+
+sim_results <- sim_slopes(two_model_total, pred =SSQSR_Total, modx = childAge, jnplot = TRUE, digits = 5)
+sim_results
+
+two_model_depression = lm (PSOC_avg ~ PHQ9_total*childAge + numChildren + HouseholdIncome + country, data = df_total)
+
+
+sim_results_dep <- sim_slopes(two_model_depression, pred = PHQ9_total, modx = childAge, jnplot = TRUE, digits = 5)
+sim_results_dep
+
+# Customize axis titles in the plot
+sim_results_plot <- plot(sim_results, ylab = "Slope of Social Support Satisfaction", xlab = "Child Age")
+sim_results_plot
+
+sim_slopes(model = two_model_total, pred =SSQSR_Total, modx = childAge, jnplot = TRUE, ylab = "Slope of Social Support Total", xlab = "Child Age")
+
+
+plot = ggplot2
+
+sim_slopes(model = two_model_depression, pred =PHQ9_total, modx = childAge, jnplot = TRUE, ylab = "Slope of Parent Depression", xlab = "Child Age")
+```
+
+
+# Plots
+
+## interactions
+
+### PHQ9
+```{r}
+
+interact_plot(model = lm(PSOC_avg ~ PHQ9_total*childAge + numChildren + HouseholdIncome, data = df), pred = PHQ9_total, modx = childAge)
+
+sim_slopes(
+  model = lm(PSOC_avg ~ PHQ9_total*childAge+ + numChildren + HouseholdIncome, data = df),
+  pred = PHQ9_total,
+  modx = childAge,
+) 
+
+```
+
+### SSQSR
+```{r}
+# simple slopes
+sim_slopes(
+  model = lm(PSOC_avg ~ SSQSR_Total*childAge+ SSQSR_SatisfactionAvg + numChildren + HouseholdIncome, data = df),
+  pred = SSQSR_Total,
+  modx = childAge,
+) 
+
+interact_plot(model = lm(PSOC_avg ~ SSQSR_Total*childAge+ SSQSR_SatisfactionAvg + numChildren + HouseholdIncome, data = df), pred = SSQSR_Total, modx = childAge)
+
+```
+
+### 3-way
+```{r}
+# PHQ9 total
+interact_plot(model = lm(PSOC_avg ~ PHQ9_total*SSQSR_SatisfactionAvg*childAge + numChildren + HouseholdIncome, data = df), pred =SSQSR_SatisfactionAvg , modx = childAge, mod2 = PHQ9_total, alpha = .05, plot.points = TRUE, interval = TRUE, int.type = "confidence", x.label = "Social Support Satisfaction", y.label = "PSOC", mod2.labels = c("PHQ9: -1 SD",  "PHQ9: Mean", "PHQ9: +1 SD"), legend.main = "Child Age", colors = c("#F8766D", "#619CFF", "#7CAE00"))
+```
+
+# JN Plots
+```{r}
+
+three_model <- lm(PSOC_avg ~ scale(SSQSR_SatisfactionAvg)*scale(childAge)*scale(PHQ9_total) + scale(numChildren) + scale(HouseholdIncome) + country, data = df)
+summary(three_model) 
+
+two_model <- lm(PSOC_avg ~ scale(PHQ9_total)*scale(SSQSR_SatisfactionAvg) +
+                               scale(SSQSR_SatisfactionAvg)*scale(childAge) + 
+                               scale(PHQ9_total)*scale(childAge) + scale(numChildren) + scale(HouseholdIncome) + country, data = df_satisfaction)
+summary(two_model)
+
+
+
+tab_model(three_model,bootstrap = TRUE,iterations = 5000,seed = 209,
+          file = "satisfaction_three_way.html")
+
+
+tab_model(two_model,bootstrap = TRUE,iterations = 5000,seed = 209,
+          file = "satisfaction_two_way.html")
+
+anova_result = anova(two_model, three_model)
+anova_result
+
+
+
+# Residual standard error: 0.4318 on 194 degrees of freedom
+#   (11 observations deleted due to missingness)
+# Multiple R-squared:  0.2455,	Adjusted R-squared:  0.2066 
+# F-statistic: 6.311 on 10 and 194 DF,  p-value: 2.301e-08
+
+# Estimate and plot interaction effects using sim_slopes
+
+three_model2 <- lm(PSOC_avg ~ SSQSR_SatisfactionAvg*childAge*PHQ9_total + numChildren + HouseholdIncome + country, data = df_satisfaction)
+
+sim_results <- sim_slopes(three_model2, pred =SSQSR_SatisfactionAvg, modx = childAge, mod2 = PHQ9_total, jnplot = TRUE)
+sim_results
+
+# Customize axis titles in the plot
+sim_results_plot <- plot(sim_results, ylab = "Slope of Social Support Satisfaction", xlab = "Child Age")
+sim_results_plot
+
+threeway_plot = sim_slopes(model = three_model2, pred =SSQSR_SatisfactionAvg, modx = childAge, mod2 = PHQ9_total, jnplot = TRUE, ylab = "Slope of Social Support Satisfaction", xlab = "Child Age")
+
+```
+
+# Predictions
+```{r}
+
+
+
+# model
+model_stan = lm(PSOC_avg_z ~ PHQ9_total_z*SSQSR_SatisfactionAvg_z*childAge_z + numChildren_z + HouseholdIncome_z + country, data = df)
+
+prediction_df = expand.grid(PHQ9_total_z = c(-1, 0, +1),
+                            SSQSR_SatisfactionAvg_z = seq(min(df$SSQSR_SatisfactionAvg_z, na.rm = TRUE), max(df$SSQSR_SatisfactionAvg_z, na.rm = TRUE), length.out = 24),
+                            childAge_z = c(-1, 0, +1),
+                            numChildren_z = mean(df$numChildren_z),
+                            HouseholdIncome_z = mean(df$HouseholdIncome_z),
+                            country = ("USA")
+                            )
+
+
+
+predictions = data.frame(predict(object = model_stan, newdata = prediction_df, interval = 'confidence')) %>% 
+  cbind(prediction_df, .) 
+
+# Create the plot
+
+plot = ggplot(predictions, aes(x = SSQSR_SatisfactionAvg_z, y = fit)) +
+  geom_point(data = df, aes(x = SSQSR_SatisfactionAvg_z, y = PSOC_avg_z, color = as.factor(predictions$childAge_z)), alpha = 0.5) +
+  geom_line(aes(color = as.factor(predictions$childAge_z))) +
+ geom_ribbon(aes(ymin = lwr, ymax = upr, fill = as.factor(predictions$childAge_z)), alpha = 0.3) +
+  facet_grid(cols = vars(as.factor(predictions$PHQ9_total_z))) +
+  ylab('Estimated PSOC\n(Standardized)') +
+  xlab('Social Support Satisfaction (Standardized)') +
+  theme_bw() +
+  labs(color = 'Child Age', fill = 'Child Age') +
+  scale_fill_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  scale_color_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  ggtitle("Depression levels (SD)") +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+
+plot
+
+plot_grid(plot, threeway_plot$jnplot, labels = c("A", "B"), nrow = 1, ncol = 2)
+
+```
+
+# 2-way interaction predictions plot
+```{r}
+
+# model
+model_stan2 = lm(PSOC_avg_z ~ SSQSR_Total_z*childAge_z + numChildren_z + HouseholdIncome_z + country, data = df)
+
+prediction_df2 = expand.grid(PHQ9_total_z = c(-1, 0, +1),
+                            SSQSR_Total_z = seq(min(df$SSQSR_Total_z, na.rm = TRUE), max(df$SSQSR_Total_z, na.rm = TRUE), length.out = 24),
+                            childAge_z = c(-1, 0, +1),
+                            numChildren_z = mean(df$numChildren_z),
+                            HouseholdIncome_z = mean(df$HouseholdIncome_z),
+                            country = ("USA")
+                            )
+
+
+
+predictions2 = data.frame(predict(object = model_stan2, newdata = prediction_df2, interval = 'confidence')) %>% 
+  cbind(prediction_df2, .)
+
+
+# Create the plot
+
+plot = ggplot(predictions2, aes(x = SSQSR_Total_z, y = fit)) +
+  geom_point (data = df, aes(x = SSQSR_Total_z, y = PSOC_avg_z, color = as.factor(predictions2$childAge_z)), alpha = 0.5) +
+  geom_line(aes(color = as.factor(predictions2$childAge_z))) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = as.factor(predictions2$childAge_z)), alpha = 0.3) +
+  ylab('Estimated PSOC\n(Standardized)') +
+  xlab('Social Support Total (Standardized)') +
+  theme_bw() +
+  labs(color = 'Child Age', fill = 'Child Age') +
+  scale_fill_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  scale_color_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+
+plot
+
+
+# for depression and child age interaction
+
+## model
+model_dep = lm(PSOC_avg_z ~ PHQ9_total_z*childAge_z + numChildren_z + HouseholdIncome_z + country, data = df)
+
+prediction_dep = expand.grid(PHQ9_total_z = c(-1, 0, +1),
+                            SSQSR_Total_z = seq(min(df$SSQSR_Total_z, na.rm = TRUE), max(df$SSQSR_Total_z, na.rm = TRUE), length.out = 24),
+                            childAge_z = c(-1, 0, +1),
+                            numChildren_z = mean(df$numChildren_z),
+                            HouseholdIncome_z = mean(df$HouseholdIncome_z),
+                            country = ("USA")
+                            )
+
+
+
+predictions_dep = data.frame(predict(object = model_dep, newdata = prediction_dep, interval = 'confidence')) %>% 
+  cbind(prediction_dep, .)
+
+## create the plot
+
+plot_dep = ggplot(predictions_dep, aes(x = PHQ9_total_z, y = fit)) +
+  geom_point (data = df, aes(x = PHQ9_total_z, y = PSOC_avg_z, color = as.factor(predictions_dep$childAge_z)), alpha = 0.5) +
+  geom_line(aes(color = as.factor(predictions_dep$childAge_z))) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = as.factor(predictions_dep$childAge_z)), alpha = 0.3) +
+  ylab('Estimated PSOC\n(Standardized)') +
+  xlab('Parent Depressive Symptoms (Standardized)') +
+  theme_bw() +
+  labs(color = 'Child Age', fill = 'Child Age') +
+  scale_fill_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  scale_color_discrete(labels=c('-1 SD', 'Mean', ' +1 SD')) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+
+plot_dep
+
+plot_grid(plot, sim_results$jnplot, plot_dep, sim_results_dep$jnplot, labels = c("A", "B", "C", "D"), axis = "bottom")
+
+
+```
